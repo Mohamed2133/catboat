@@ -10,7 +10,7 @@ from groq import Groq
 import random
 import time
 
-load_dotenv(override=True)
+#load_dotenv(override=True)
 
 def push(text):
     requests.post(
