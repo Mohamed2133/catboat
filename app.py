@@ -42,6 +42,7 @@ def record_unknown_question(question):
     push(f"Recording {question}")
     return {"recorded": "ok"}
 def clean_messages(messages):
+    print(msg)
     # Only keep role + content, and skip non-dict items
     allowed = {"role", "content", "tool_call_id"}
     cleaned = []
