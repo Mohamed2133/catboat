@@ -42,7 +42,6 @@ def record_unknown_question(question):
     push(f"Recording {question}")
     return {"recorded": "ok"}
 def clean_messages(messages):
-    print(msg)
     # Only keep role + content, and skip non-dict items
     allowed = {"role", "content", "tool_call_id"}
     cleaned = []
@@ -103,20 +102,20 @@ tools = [{"type": "function", "function": record_user_details_json},
 
 class Me:
 
-    def __init__(self):
+    def __init__(self,recorded_emails):
         self.openai = OpenAI()
         self.groq = Groq()
         self.name = "Mohamed Shemy"
+        self.recorded_emails = recorded_emails
         self.tool_call_history = set() 
-        reader = PdfReader("me/linkedin.pdf")
+        reader = PdfReader("C:/Users/mshem/projects/agents/1_foundations/me/linkedin.pdf")
         self.linkedin = ""
         for page in reader.pages:
             text = page.extract_text()
             if text:
                 self.linkedin += text
-        with open("me/summary.txt", "r", encoding="utf-8") as f:
+        with open("C:/Users/mshem/projects/agents/1_foundations/me/summary.txt", "r", encoding="utf-8") as f:
             self.summary = f.read()
-
 
     def handle_tool_call(self, tool_calls):
         results = []
@@ -124,24 +123,17 @@ class Me:
             try:
                 tool_name = tool_call.function.name
                 arguments = json.loads(tool_call.function.arguments)
-                
-                # Create a unique key for this tool call
-                call_key = f"{tool_name}:{arguments.get('email', '')}"
-                
-                # Skip if we've already made this call
-                if call_key in self.tool_call_history:
-                    print(f"Skipping duplicate tool call: {tool_name}", flush=True)
-                    continue
-                
-                print(f"Tool called: {tool_name}", flush=True)
-                
-                # Validate record_user_details calls
+                email = arguments.get("email", "")
+                call_key = f"{tool_name}:{email}"
+
+                # Prevent duplicate record_user_details calls for the same email
                 if tool_name == "record_user_details":
-                    if not arguments.get("email"):
-                        print("Warning: Skipping record_user_details - missing email", flush=True)
+                    if not email or email in self.recorded_emails:
+                        print(f"Skipping duplicate or empty email tool call: {email}", flush=True)
                         continue
-                    self.tool_call_history.add(call_key)
-                
+                    self.recorded_emails.add(email)
+
+                print(f"Tool called: {tool_name}", flush=True)
                 tool = globals().get(tool_name)
                 result = tool(**arguments) if tool else {}
                 results.append({
@@ -149,40 +141,32 @@ class Me:
                     "content": json.dumps(result),
                     "tool_call_id": tool_call.id
                 })
-                
-            except json.JSONDecodeError as e:
-                print(f"Warning: Invalid JSON in tool arguments: {str(e)}", flush=True)
-                continue
+
             except Exception as e:
                 print(f"Warning: Tool call failed: {str(e)}", flush=True)
                 continue
-                
+
         return results
     
     def system_prompt(self):
-        system_prompt = f"You are acting as {self.name}. You are answering questions on {self.name}'s website, \
-particularly questions related to {self.name}'s career, background, skills and experience. \
-Your responsibility is to represent {self.name} for interactions on the website as faithfully as possible. \
-You are given a summary of {self.name}'s background and LinkedIn profile which you can use to answer questions. \
-Be professional and engaging, as if talking to a potential client or future employer who came across the website. \
-If you don't know the answer to any question, use your record_unknown_question tool to record the question that you couldn't answer, even if it's about something trivial or unrelated to career. \
-If the user is engaging in discussion, try to steer them towards getting in touch via email; ask for their email and record it using your record_user_details tool.  please say it in a way that is not offensive or dismissive., and not answer in any question outside my background "
-        system_prompt +=f"""Important instructions for tool usage:
-1. 1. For record_user_details:
-   - Only call ONCE per email address
-   - Must have a valid email address
-   - Never call with empty email
-2. For record_unknown_question:
-   - Use for any question you cannot answer
-   - Call only once per unique question
-3. Use record_unknown_question for questions you cannot answer
-4. if you don't have user email not call any function  just  ask the user to enter any data to contact
-5. after obtaining user email, you can call record_user_details with the email and any other relevant information.
-6. If a user provides their email, call record_user_details exactly ONE time with that email.
-Never make multiple tool calls with the same information.
-If you don't know the answer to any question, use record_unknown_question to record it.When asking for contact information, ask naturally and wait for the user to provide their email before using record_user_details."""
-        system_prompt += f"\n\n## Summary:\n{self.summary}\n\n## LinkedIn Profile:\n{self.linkedin}\n\n"
-        system_prompt += f"With this context, please chat with the user, always staying in character as {self.name}."
+        system_prompt = (
+    f"You are {self.name}, a professional AI assistant representing {self.name} on their website. "
+    "Your job is to answer questions about their career, background, skills, and experience, using the provided summary and LinkedIn profile. "
+    "Always be professional, engaging, and helpful, as if speaking to a potential client or employer. "
+    "Stay strictly within {self.name}'s background—do not answer questions outside this scope.\n\n"
+    "If you do not know the answer to a question, use the 'record_unknown_question' tool to log it. "
+    "If a user expresses interest in connecting, politely ask for their email address. "
+    "Only use the 'record_user_details' tool after the user provides a valid email, and never call it more than once per email address.\n\n"
+    "TOOL USAGE RULES:\n"
+    "1. Only call 'record_user_details' ONCE per unique, valid email address. Never call it with an empty or invalid email.\n"
+    "2. Only call 'record_unknown_question' ONCE per unique question you cannot answer.\n"
+    "3. If you do not have the user's email, do not call any tool—just ask the user to provide their contact information.\n"
+    "4. After obtaining the user's email, call 'record_user_details' with the email and any relevant information.\n"
+    "5. Never make duplicate tool calls with the same information.\n"
+    "6. When asking for contact information, be polite and natural. Wait for the user to provide their email before using 'record_user_details'.\n\n"
+    f"## Summary:\n{self.summary}\n\n"
+    f"## LinkedIn Profile:\n{self.linkedin}\n\n"
+    f"With this context, always stay in character as {self.name} and chat with the user.")
         return system_prompt
     
     def chat(self, message, history):
@@ -191,7 +175,7 @@ If you don't know the answer to any question, use record_unknown_question to rec
         done = False
         while not done:
             msgs = clean_messages(messages)
-            response = self.groq.chat.completions.create(model="llama-3.3-70b-versatile", messages=msgs, tools=tools)
+            response = self.groq.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, tools=tools)
             #response = self.openai.chat.completions.create(model="gpt-4o-mini", messages=messages, tools=tools)
             if response.choices[0].finish_reason=="tool_calls":
                 message = response.choices[0].message
@@ -206,7 +190,7 @@ If you don't know the answer to any question, use record_unknown_question to rec
     
 
 if __name__ == "__main__":
-    me = Me()
+   # me = Me()
     with st.sidebar:
         st.image("https://media.licdn.com/dms/image/v2/C4D03AQGmWSTEAWN1HA/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1645105701595?e=1759363200&v=beta&t=H1DlnaP5B7d4krgVxFhYf_ANqnBfFlF2-C2vGk98Z1Q", width=50)
         st.header(" 💬Mohamed Shemy Info")
@@ -215,6 +199,10 @@ if __name__ == "__main__":
     # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "recorded_emails" not in st.session_state:
+        st.session_state.recorded_emails = set()
+    me = Me(st.session_state.recorded_emails)
+
 
     # Display chat messages from history on app rerun
     for message in st.session_state.messages:
