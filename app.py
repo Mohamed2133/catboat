@@ -108,13 +108,13 @@ class Me:
         self.name = "Mohamed Shemy"
         self.recorded_emails = recorded_emails
         self.tool_call_history = set() 
-        reader = PdfReader("C:/Users/mshem/projects/agents/1_foundations/me/linkedin.pdf")
+        reader = PdfReader("/me/linkedin.pdf")
         self.linkedin = ""
         for page in reader.pages:
             text = page.extract_text()
             if text:
                 self.linkedin += text
-        with open("C:/Users/mshem/projects/agents/1_foundations/me/summary.txt", "r", encoding="utf-8") as f:
+        with open("/me/summary.txt", "r", encoding="utf-8") as f:
             self.summary = f.read()
 
     def handle_tool_call(self, tool_calls):
